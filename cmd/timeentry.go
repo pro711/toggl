@@ -23,6 +23,7 @@ package cmd
 import (
     "fmt"
     "log"
+    "time"
     "github.com/spf13/cobra"
     "github.com/spf13/viper"
     toggl "github.com/jason0x43/go-toggl"
@@ -35,6 +36,15 @@ func getProjectID(account toggl.Account, proj string) (int, error) {
         }
     }
     return -1, fmt.Errorf("Project not found: %s", proj)
+}
+
+func getProjectName(account toggl.Account, pid int) (string, error) {
+    for _, project := range account.Data.Projects {
+        if project.ID == pid {
+            return project.Name, nil
+        }
+    }
+    return "", fmt.Errorf("Project ID not found: %d", pid)
 }
 
 func getCurrentTimeEntry(account toggl.Account) (*toggl.TimeEntry, error) {
@@ -83,9 +93,32 @@ func stopCurrentTimeEntry() error {
     return nil
 }
 
+func showCurrentTimeEntry() error {
+    var session = toggl.OpenSession(viper.GetString("token"))
+    account, err := session.GetAccount()
+    if err != nil {
+        return err
+    }
+    timeEntry, err := getCurrentTimeEntry(account)
+    if timeEntry != nil {
+        var project string
+        if project, err = getProjectName(account, timeEntry.Pid); err != nil {
+            return err
+        }
+        duration := time.Now().Sub(timeEntry.StartTime())
+        // round to seconds
+        duration = duration / 1000000000 * 1000000000
+        fmt.Printf("%s | Project:%s | Duration:%v\n", timeEntry.Description,
+            project, duration)
+    } else {
+        fmt.Printf("Timer not running.\n")
+    }
+    return nil
+}
+
 var project string
 
-var startTimeEntryCmd = &cobra.Command{
+var timeEntryStartCmd = &cobra.Command{
     Use: "start [flags] description",
     Short: "Start a new time entry",
     Run: func(cmd *cobra.Command, args []string) {
@@ -96,7 +129,7 @@ var startTimeEntryCmd = &cobra.Command{
     },
 }
 
-var stopTimeEntryCmd = &cobra.Command{
+var timeEntryStopCmd = &cobra.Command{
     Use: "stop",
     Short: "Stop the current time entry",
     Run: func(cmd *cobra.Command, args []string) {
@@ -104,15 +137,30 @@ var stopTimeEntryCmd = &cobra.Command{
     },
 }
 
+var timeEntryStatusCmd = &cobra.Command{
+    Use: "status",
+    Short: "Show current time entry status",
+    Run: func(cmd *cobra.Command, args []string) {
+        showCurrentTimeEntry()
+    },
+}
+
 var timeEntryCommands = [...]*cobra.Command{
-    startTimeEntryCmd,
-    stopTimeEntryCmd,
+    timeEntryStartCmd,
+    timeEntryStopCmd,
+    timeEntryStatusCmd,
+}
+
+var timeEntryCommandsWithProjectFlag = [...]*cobra.Command{
+    timeEntryStartCmd,
+    timeEntryStopCmd,
 }
 
 func init() {
-    TogglCommand.AddCommand(startTimeEntryCmd)
-    TogglCommand.AddCommand(stopTimeEntryCmd)
-    for _, cmd := range timeEntryCommands {
+    for _, cmd := range timeEntryCommandsWithProjectFlag {
         cmd.Flags().StringVarP(&project, "project", "P", "", "Project")
+    }
+    for _, cmd := range timeEntryCommands {
+        TogglCommand.AddCommand(cmd)
     }
 }
