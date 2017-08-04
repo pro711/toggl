@@ -73,7 +73,8 @@ func startTimeEntry(desc string, proj string) error {
         if projID, err = getProjectID(account, proj); err != nil {
             return err
         }
-        if _, err = session.StartTimeEntryForProject(desc, projID); err != nil {
+        _, err = session.StartTimeEntryForProject(desc, projID, false);
+        if err != nil {
             return err
         }
     }
@@ -153,7 +154,6 @@ var timeEntryCommands = [...]*cobra.Command{
 
 var timeEntryCommandsWithProjectFlag = [...]*cobra.Command{
     timeEntryStartCmd,
-    timeEntryStopCmd,
 }
 
 func init() {
